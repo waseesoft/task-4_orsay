@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Scrapy settings for orsay_spider project
+# Scrapy settings for task4_orsay project
 #
 # For simplicity, this file contains only settings considered important or
 # commonly used. You can find more settings consulting the documentation:
@@ -13,10 +13,10 @@ NEWSPIDER_MODULE = 'orsay_spider.spiders'
 
 
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
-#USER_AGENT = 'orsay_spider (+http://www.yourdomain.com)'
+#USER_AGENT = 'task4_orsay (+http://www.yourdomain.com)'
 
 # Obey robots.txt rules
-ROBOTSTXT_OBEY = True
+ROBOTSTXT_OBEY = False
 
 # Configure maximum concurrent requests performed by Scrapy (default: 16)
 #CONCURRENT_REQUESTS = 32
@@ -44,13 +44,13 @@ ROBOTSTXT_OBEY = True
 # Enable or disable spider middlewares
 # See https://docs.scrapy.org/en/latest/topics/spider-middleware.html
 #SPIDER_MIDDLEWARES = {
-#    'orsay_spider.middlewares.OrsaySpiderSpiderMiddleware': 543,
+#    'task4_orsay.middlewares.OrsaySpiderSpiderMiddleware': 543,
 #}
 
 # Enable or disable downloader middlewares
 # See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
 #DOWNLOADER_MIDDLEWARES = {
-#    'orsay_spider.middlewares.OrsaySpiderDownloaderMiddleware': 543,
+#    'task4_orsay.middlewares.OrsaySpiderDownloaderMiddleware': 543,
 #}
 
 # Enable or disable extensions
@@ -62,7 +62,7 @@ ROBOTSTXT_OBEY = True
 # Configure item pipelines
 # See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
 #ITEM_PIPELINES = {
-#    'orsay_spider.pipelines.OrsaySpiderPipeline': 300,
+#    'task4_orsay.pipelines.OrsaySpiderPipeline': 300,
 #}
 
 # Enable and configure the AutoThrottle extension (disabled by default)
