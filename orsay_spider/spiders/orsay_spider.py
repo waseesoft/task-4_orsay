@@ -1,96 +1,106 @@
-import math
-import scrapy
-from orsay_spider.items import OrsaySpiderItem
+from scrapy import Request
+from scrapy.spiders import CrawlSpider, Rule
+from scrapy.linkextractors import LinkExtractor
+from w3lib.url import add_or_replace_parameter
+
+from orsay_spider.items import Item
 
 
-class OrsaySpider(scrapy.Spider):
+class OrsaySpider(CrawlSpider):
     name = "orsay"
+    PAGE_SIZE = 72
+    PRICE_RE = r'[\d,.]+'
+
+    allowed_domains = [
+        'orsay.com',
+    ]
     start_urls = [
-        'https://www.orsay.com/de-de/produkte/'
+        'https://www.orsay.com/de-de/produkte/',
+    ]
+    listings_css = [
+        '.navigation-link',
+    ]
+    rules = [
+        Rule(LinkExtractor(restrict_css=listings_css), callback='parse_pagination'),
     ]
 
-    def parse(self, response):
-        urls_s = response.css('a.refinement-category-link')
+    def parse_pagination(self, response):
+        yield from super().parse(response)
 
-        return [response.follow(url_s, callback=self.parse_categories) for url_s in urls_s]
-
-    def parse_categories(self, response):
-        urls_s = response.css('a.refinement-category-link')
-
-        return [response.follow(url_s, callback=self.parse_products_url) for url_s in urls_s]
-
-    def parse_products_url(self, response):
         urls_s = response.css('a.thumb-link')
         yield from [response.follow(url_s, callback=self.parse_product) for url_s in urls_s]
+        product_count = int(response.css('.load-more-progress::attr(data-max)').getall()[0])
 
-        products_found = int(self.get_total_products(response))
-        if products_found > 72:
-            pages = math.ceil(products_found / 72) + 1
-            load_more = '?sz={}'
-            yield from [response.follow(load_more.format(page * 72), callback=self.parse_products_url)
-                        for page in range(2, pages)]
+        if product_count > self.PAGE_SIZE:
+            pages = product_count // self.PAGE_SIZE + 2
+            return [Request(add_or_replace_parameter(response.url, 'sz', page * self.PAGE_SIZE),
+                            callback=self.parse_pagination) for page in range(2, pages)]
 
     def parse_product(self, response):
-        item = OrsaySpiderItem()
-        item['item_id'] = self.get_id(response)
+        item = Item()
+        item['product_id'] = self.get_product_id(response)
         item['name'] = self.get_name(response)
         item['description'] = self.get_description(response)
-        item['availability'] = self.get_availability(response)
         item['image_urls'] = self.get_image_urls(response)
-        item['currency'] = self.get_currency(response)
         item['skus'] = self.get_skus(response)
+        item['meta'] = {'requests': self.get_color_requests(item, response)}
 
-        return item
+        return self.request_or_item(item)
 
-    def get_total_products(self, response):
-        return response.css('.load-more-progress::attr(data-max)').get()
+    def parse_color(self, response):
+        item = response.meta['item']
+        item['skus'].update(self.get_skus(response))
+        item['image_urls'] += self.get_image_urls(response)
+        return self.request_or_item(item)
 
-    def get_id(self, response):
-        return response.css('div.product-tile::attr(data-itemid)').get()
+    def get_color_requests(self, item, response):
+        urls = response.css('.swatches.color li[class="selectable"] a::attr(href)').getall()
+        return [Request(url, callback=self.parse_color, dont_filter=True, meta={'item': item})
+                for url in urls if url]
+
+    def request_or_item(self, item):
+        if item.get('meta') and item['meta'].get('requests'):
+            return item['meta']['requests'].pop()
+        else:
+            del item['meta']
+            return item
+
+    def get_product_id(self, response):
+        return response.css('.product-tile::attr(data-itemid)').getall()[0]
 
     def get_name(self, response):
-        return response.css('.product-name::text').get()
-
-    def get_image_urls(self, response):
-        return response.css('img.productthumbnail::attr(src)').getall()
-
-    def get_currency(self, response):
-        return response.css('.current .country-currency::text').get()
-
-    def get_availability(self, response):
-        return response.css('p.in-stock-msg ::text').get()
+        return response.css('.product-name::text').getall()[0]
 
     def get_description(self, response):
-        return response.css('.with-gutter::text').re(r'(\S.*)')
+        css = '.product-info-title ~p::text, .js-collapsible ::text'
+        return self.clean(response.css(css).getall())
 
-    def get_sizes(self, response):
-        return self.filter_empty(response.css('li.selectable a.swatchanchor::text').re('(\S.*)'))
-
-    def get_colors(self, response):
-        return response.css('.swatchanchor::attr(title)').re('-\s(.*)')
-
-    def get_old_prices(self, response):
-        return self.remove_commas(response.css('.price-standard::text').re('[\d,.]+'))
-
-    def get_sale_price(self, response):
-        return ''.join(response.css('.price-sales::text').re('[\d.]+'))
+    def get_image_urls(self, response):
+        return response.css('.productthumbnail::attr(src)').getall()
 
     def get_skus(self, response):
-        skus = []
-        for raw_sku in self.get_sizes(response):
-            skus.append({
-                raw_sku: {
-                    'size': raw_sku,
-                    'colors': self.get_colors(response),
-                    'old_prices': self.get_old_prices(response),
-                    'price': self.get_sale_price(response)
-                }
-            })
+        skus = {}
+        color_css = '.selectable.selected .swatchanchor::attr(title)'
+        color = response.css(color_css).getall()[0].split('-')[-1].strip()
+        sizes = self.clean(response.css('.swatches.size a::text').getall())
+        oos_sizes = self.clean(response.css('.unselectable a.swatchanchor::text').getall())
+
+        for size in sizes or ['size-one']:
+            sku = self.get_prices(response)
+            sku['availability'] = size in oos_sizes
+            sku['size'] = size
+            sku['color'] = color
+            skus[f'{color}_{size}'] = sku
 
         return skus
 
-    def remove_commas(self, elements):
-        return [e.replace(',', '') for e in elements]
+    def get_prices(self, response):
+        return {
+            'currency': response.css('.current .country-currency::text').getall()[0],
+            'price': response.css('.price-sales::text').re(self.PRICE_RE)[0].replace(',', ''),
+            'old_prices': [e.replace(',', '') for e in response.css('.price-standard::text')
+                .re(self.PRICE_RE)],
+        }
 
-    def filter_empty(self, data):
-        return ['size one'] if not data else data
+    def clean(self, data):
+        return [e.strip() for e in data if e and e.strip()]

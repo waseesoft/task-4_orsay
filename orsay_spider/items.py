@@ -1,8 +1,7 @@
-
 import scrapy
 
 
-class OrsaySpiderItem(scrapy.Item):
+class Item(scrapy.Item):
     item_id = scrapy.Field()
     name = scrapy.Field()
     brand = scrapy.Field()
@@ -11,3 +10,4 @@ class OrsaySpiderItem(scrapy.Item):
     currency = scrapy.Field()
     image_urls = scrapy.Field()
     skus = scrapy.Field()
+    meta = scrapy.Field()
