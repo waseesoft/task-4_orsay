@@ -1,8 +1,13 @@
-
 import scrapy
 
 
-class OrsaySpiderItem(scrapy.Item):
-    # define the fields for your item here like:
-    # name = scrapy.Field()
-    pass
+class Item(scrapy.Item):
+    item_id = scrapy.Field()
+    name = scrapy.Field()
+    brand = scrapy.Field()
+    description = scrapy.Field()
+    availability = scrapy.Field()
+    currency = scrapy.Field()
+    image_urls = scrapy.Field()
+    skus = scrapy.Field()
+    meta = scrapy.Field()
